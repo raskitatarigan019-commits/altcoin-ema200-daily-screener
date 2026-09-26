@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Altcoin EMA200 Daily Screener</title>
+<style>
+:root{--bg:#07111f;--p:#0d1a2b;--line:#20334b;--text:#e8f0f8;--muted:#91a4ba;--green:#39d98a;--red:#ff6b7a;--blue:#4da3ff}
+*{box-sizing:border-box}body{margin:0;background:linear-gradient(135deg,#06101c,#0b1727,#07111f);color:var(--text);font-family:Inter,system-ui,sans-serif}
+.wrap{max-width:1250px;margin:auto;padding:28px 18px 48px}.hero{display:flex;justify-content:space-between;gap:20px;align-items:end;margin-bottom:22px}
+.ey{color:var(--blue);font-weight:800;letter-spacing:.12em;font-size:12px}.hero h1{margin:7px 0 8px;font-size:32px}.hero p{margin:0;color:var(--muted)}
+button{border:0;border-radius:10px;padding:11px 16px;background:var(--blue);color:#fff;font-weight:800;cursor:pointer}.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:14px}
+.stat,.controls,.box{background:rgba(13,26,43,.92);border:1px solid var(--line);border-radius:14px}.stat{padding:16px}.stat b{display:block;font-size:25px}.stat span{color:var(--muted);font-size:12px}
+.controls{padding:14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:14px}.controls input,.controls select{background:#101f33;border:1px solid var(--line);color:var(--text);border-radius:9px;padding:10px 12px}.controls label{color:var(--muted);font-size:13px}
+.head{padding:14px 16px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between}.head span,.sub,.note{color:var(--muted);font-size:12px}.scroll{overflow:auto}
+table{width:100%;border-collapse:collapse;min-width:820px}th,td{text-align:left;padding:13px 15px;border-bottom:1px solid rgba(32,51,75,.7);font-size:13px}th{color:#8ea4bb;font-size:11px;text-transform:uppercase;background:#0b1727;position:sticky;top:0}
+.coin{font-weight:800}.above{color:var(--green);font-weight:800}.below{color:var(--red);font-weight:800}.badge{display:inline-flex;padding:5px 8px;border-radius:99px;font-size:11px;font-weight:800;background:rgba(255,107,122,.12);color:var(--red)}.badge.g{background:rgba(57,217,138,.12);color:var(--green)}
+.loading{text-align:center;color:var(--muted);padding:30px}.error{color:var(--red);padding:20px}@media(max-width:700px){.stats{grid-template-columns:repeat(2,1fr)}.hero{flex-direction:column;align-items:flex-start}.hero h1{font-size:26px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<section class="hero"><div><div class="ey">MARKET STRUCTURE SCREENER</div>
+<h1>Altcoin EMA200 — Daily Closed</h1>
+<p>Close candle Daily <b>yang sudah closed</b> dibandingkan dengan EMA200.</p></div>
+<button id="refresh">↻ Refresh Market</button></section>
+<div class="stats">
+<div class="stat"><b id="total">—</b><span>ALTCOIN DI-SCREEN</span></div>
+<div class="stat"><b id="above">—</b><span>CLOSE &gt; EMA200</span></div>
+<div class="stat"><b id="cross">—</b><span>NEW CROSS UP</span></div>
+<div class="stat"><b id="updated">—</b><span>UPDATE</span></div>
+</div>
+<div class="controls">
+<label>Search <input id="search" placeholder="SOL, SUI, SEI..."></label>
+<label>Filter <select id="filter"><option value="above">Di atas EMA200</option><option value="cross">Cross Up</option><option value="all">Semua</option></select></label>
+<label>Sort <select id="sort"><option value="distance">Jarak EMA200</option><option value="change">24h Change</option><option value="symbol">Symbol</option></select></label>
+</div>
+<div class="box"><div class="head"><b>Daily EMA200 Screener</b><span id="status">Memuat OKX…</span></div>
+<div class="scroll"><table><thead><tr><th>Coin</th><th>Last Closed</th><th>EMA200</th><th>Distance</th><th>24h</th><th>Signal</th><th>Closed At</th></tr></thead>
+<tbody id="rows"><tr><td colspan="7" class="loading">Mengambil candle Daily…</td></tr></tbody></table></div></div>
+<p class="note">Hanya candle OKX dengan <b>confirm=1</b> yang dipakai. Candle Daily yang masih berjalan dikeluarkan. EMA200 dihitung dari close candle Daily. Data berasal dari OKX public market API. Screener ini adalah alat teknikal, bukan rekomendasi investasi.</p>
+</div>
+<script>
+const API='https://www.okx.com/api/v5', $=id=>document.getElementById(id);let data=[];
+const excluded=new Set(['USDT','USDC','DAI','FDUSD','TUSD','USDG','USDE','PYUSD','EURT','WBTC','WETH']);
+async function json(u){const r=await fetch(u);if(!r.ok)throw Error('HTTP '+r.status);const j=await r.json();if(j.code!=='0')throw Error(j.msg||'OKX error');return j.data}
+function ema(a,n=200){const k=2/(n+1);let e=a[0];for(let i=1;i<a.length;i++)e=a[i]*k+e*(1-k);return e}
+async function scan(id){
+ const c=await json(API+'/market/candles?instId='+encodeURIComponent(id)+'&bar=1D&limit=300');
+ const x=c.filter(v=>v[8]==='1').sort((a,b)=>+a[0]-+b[0]);if(x.length<201)return null;
+ const a=x.map(v=>+v[4]),last=a.at(-1),prev=a.at(-2),e=ema(a.slice(-200)),pe=ema(a.slice(-201,-1));
+ const t=(await json(API+'/market/ticker?instId='+encodeURIComponent(id)))[0],ch=+t.open24h?(+t.last-+t.open24h)/+t.open24h*100:0;
+ return{symbol:id.split('-')[0],last,e,d:(last/e-1)*100,ch,cross:prev<=pe&&last>e,ts:+x.at(-1)[0]}
+}
+async function run(){
+ data=[];$('rows').innerHTML='<tr><td colspan="7" class="loading">Mengambil daftar altcoin…</td></tr>';$('refresh').disabled=true;
+ try{
+  const ins=await json(API+'/public/instruments?instType=SPOT');
+  const ids=ins.filter(x=>x.state==='live'&&x.quoteCcy==='USDT'&&!excluded.has(x.baseCcy)).map(x=>x.instId).slice(0,160);
+  for(let i=0;i<ids.length;i+=8){
+   const z=await Promise.all(ids.slice(i,i+8).map(scan).map(p=>p.catch(()=>null)));
+   data.push(...z.filter(Boolean));$('status').textContent='Screening '+Math.min(i+8,ids.length)+' / '+ids.length;render()
+  }
+  $('status').textContent='Selesai • '+data.length+' coin valid'
+ }catch(e){$('rows').innerHTML='<tr><td colspan="7" class="error">Gagal: '+e.message+'</td></tr>'}
+ finally{$('refresh').disabled=false}
+}
+function render(){
+ const q=$('search').value.toUpperCase(),f=$('filter').value,s=$('sort').value;
+ let a=data.filter(x=>x.symbol.includes(q)&&(f==='all'||f==='above'&&x.last>x.e||f==='cross'&&x.cross));
+ a.sort((x,y)=>s==='distance'?y.d-x.d:s==='change'?y.ch-x.ch:x.symbol.localeCompare(y.symbol));
+ $('total').textContent=data.length;$('above').textContent=data.filter(x=>x.last>x.e).length;$('cross').textContent=data.filter(x=>x.cross).length;
+ $('updated').textContent=new Date().toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'});
+ $('rows').innerHTML=a.map(x=>'<tr><td><span class="coin">'+x.symbol+'</span><div class="sub">USDT</div></td><td>$'+fmt(x.last)+'</td><td>$'+fmt(x.e)+'</td><td class="'+(x.d>=0?'above':'below')+'">'+(x.d>=0?'+':'')+x.d.toFixed(2)+'%</td><td class="'+(x.ch>=0?'above':'below')+'">'+(x.ch>=0?'+':'')+x.ch.toFixed(2)+'%</td><td><span class="badge '+(x.last>x.e?'g':'')+'">'+(x.cross?'CROSS UP':x.last>x.e?'ABOVE EMA200':'BELOW EMA200')+'</span></td><td>'+new Date(x.ts).toLocaleDateString('id-ID')+'</td></tr>').join('')||'<tr><td colspan="7" class="loading">Tidak ada hasil.</td></tr>'
+}
+function fmt(n){return n>=1000?n.toLocaleString('en-US',{maximumFractionDigits:2}):n>=1?n.toFixed(2):n.toPrecision(5)}
+$('refresh').onclick=run;$('search').oninput=render;$('filter').onchange=render;$('sort').onchange=render;run();
+</script>
+</body></html>
